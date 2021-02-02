@@ -1,21 +1,18 @@
 import { Router } from 'express';
-import AuthenticateUserService from '@modules/users/services/AuthenticateUserservice';
+
+import {celebrate, Segments, Joi} from 'celebrate';
+
+
+import SessionsController from '../controllers/SessionsController';
 
 const sessionsRouter = Router();
-
+const sessionsController = new SessionsController();
 // Para a autenticação do usuário precisamos de e-mail e senha
 
-sessionsRouter.post('/', async (request, response) => {
-    const { email, password } = request.body;
-
-    const authenticateUser = new AuthenticateUserService();
-
-    const { user, token } = await authenticateUser.execute({
-        email,
-        password,
-    });
-
-    return response.json({ user, token });
-});
+sessionsRouter.post('/', celebrate({ [Segments.BODY]: {
+    email: Joi.string().email().required(),
+    password: Joi.string().required(),
+},
+}), sessionsController.create);
 
 export default sessionsRouter;

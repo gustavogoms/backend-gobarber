@@ -1,8 +1,11 @@
-import { getRepository } from 'typeorm';
 import fs from 'fs';
 import path from 'path';
 import uploadConfig from '@config/upload';
 import AppError from '@shared/errors/AppError';
+import { inject, injectable } from 'tsyringe';
+import IUsersRepository from '../repositories/IUsersRepository';
+import IStorageProvider from '@shared/container/providers/StorageProvider/models/IStorageProvider';
+
 import User from '../infra/typeorm/entities/User';
 
 interface Request {
@@ -10,13 +13,19 @@ interface Request {
     user_id: string;
     avatarFileName: string;
 }
-
+@injectable()
 class UpdateUserAvatarService {
+    constructor(
+        @inject('UsersRepository')
+        private usersRepository: IUsersRepository,
+
+        @inject('StorageProvider')
+        private storageProvider: IStorageProvider,
+    ) {}
+
     // eslint-disable-next-line camelcase
     public async execute({ user_id, avatarFileName }: Request): Promise<User> {
-        const usersRepository = getRepository(User);
-
-        const user = await usersRepository.findOne(user_id);
+        const user = await this.usersRepository.findById(user_id);
         if (!user) {
             throw new AppError(
                 'Only Authenticated users can change avatar.',
@@ -25,20 +34,12 @@ class UpdateUserAvatarService {
         }
 
         if (user.avatar) {
-            const userAvatarFilePath = path.join(
-                uploadConfig.directory,
-                user.avatar,
-            );
-            const userAvatarFileExists = await fs.promises.stat(
-                userAvatarFilePath,
-            );
-
-            if (userAvatarFileExists) {
-                await fs.promises.unlink(userAvatarFilePath);
-            }
+           await this.storageProvider.deleteFile(user.avatar);
         }
-        user.avatar = avatarFileName;
-        await usersRepository.save(user);
+
+        const filename = await this.storageProvider.saveFile(avatarFileName);
+        user.avatar = filename;
+        await this.usersRepository.save(user);
         return user;
     }
 }
